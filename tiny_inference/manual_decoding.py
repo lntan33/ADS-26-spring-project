@@ -51,6 +51,13 @@ def decode_tokens_manual(
     prefill_input_ids = input_ids
     prefill_past_kv = None
     prefix_hit_tokens = 0
+
+    if use_cache and prefix_cache is not None:
+        matched_len, loaded_cache = prefix_cache.lookup(input_ids[0].tolist())
+        if matched_len > 0:
+            prefill_input_ids = input_ids[:, matched_len:]
+            prefill_past_kv = loaded_cache
+            prefix_hit_tokens = matched_len 
     # ===== TODO: Prefix Cache - (END) =====
 
 
@@ -70,6 +77,8 @@ def decode_tokens_manual(
     # 当 use_cache=True 且 prefix_cache 不为 None 时：
     #   调用 prefix_cache.insert(input_ids[0].tolist(), past_key_values)
     # 注意：insert 内部会负责 clone，这里不用手动 clone。
+    if use_cache and prefix_cache is not None:
+        prefix_cache.insert(input_ids[0].tolist(), past_key_values)
     # ===== TODO: Prefix Cache - (END) =====
 
     # 从 prefill 输出的最后一个位置采样第一个新 token
@@ -92,7 +101,13 @@ def decode_tokens_manual(
             # 调用 qwen3_5_text_forward，只传入本步新生成的 1 个 token（而非完整序列），
             # 同时传入 past_key_values（已有缓存）和 use_cache=True。
             # 函数返回新的 logits 和更新后的 past_key_values，供下一步继续使用。
-            raise NotImplementedError("KV Cache decode 尚未实现，请完成此 TODO 块")
+            logits, past_key_values = qwen3_5_text_forward(
+                model=model,
+                input_ids=next_token,
+                attention_mask=attention_mask,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
             
             # ===== TODO: KV Cache - Decode 单步（用缓存替代全序列重计算）(END) =====
         else:
@@ -193,7 +208,13 @@ def decode_stream_manual(
         if use_cache:
             # ===== TODO: KV Cache - Streaming Decode 单步（用缓存替代全序列重计算）(START) =====
             # 启用缓存时：只输入刚生成的 1 个 token，携带已有缓存，forward 内部追加并返回更新后的缓存
-            raise NotImplementedError("KV Cache decode 尚未实现，请完成此 TODO 块")
+            logits, past_key_values = qwen3_5_text_forward(
+                model=model,
+                input_ids=next_token,
+                attention_mask=attention_mask,
+                past_key_values=past_key_values,
+                use_cache=True,
+            )
             
             # ===== TODO: KV Cache - Streaming Decode 单步（用缓存替代全序列重计算）(END) =====
         else:
