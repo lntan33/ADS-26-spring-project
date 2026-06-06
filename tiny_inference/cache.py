@@ -229,9 +229,27 @@ class Qwen3_5DynamicCache:
         3. 不要 clone——反正 tensor 已离开 GPU，且 `torch.save` 会再做一次拷贝。
         """
         # ===== TODO: SSD Offload - cache 序列化 (START) =====
-        raise NotImplementedError(
-            "请根据提示实现 to_cpu_state_dict()"
-        )
+        return {
+            "layer_types": self.layer_types,
+            "transformer_layers": self.transformer_layers,
+            "last_linear_layer": self.last_linear_layer,
+            "key_cache": [
+                x.detach().cpu() if x is not None else None
+                for x in self.key_cache
+            ],
+            "value_cache": [
+                x.detach().cpu() if x is not None else None
+                for x in self.value_cache
+            ],
+            "conv_states": [
+                x.detach().cpu() if x is not None else None
+                for x in self.conv_states
+            ],
+            "recurrent_states": [
+                x.detach().cpu() if x is not None else None
+                for x in self.recurrent_states
+            ],
+        }
         # ===== TODO: SSD Offload - cache 序列化 (END) =====
 
     @classmethod
@@ -258,9 +276,27 @@ class Qwen3_5DynamicCache:
         4. 返回 obj。
         """
         # ===== TODO: SSD Offload - cache 反序列化 (START) =====
-        raise NotImplementedError(
-            "请根据提示实现 from_cpu_state_dict()"
-        )
+        obj = object.__new__(cls)
+        obj.layer_types = state["layer_types"]
+        obj.transformer_layers = state["transformer_layers"]
+        obj.last_linear_layer = state["last_linear_layer"]
+        obj.key_cache = [
+            x.to(device) if x is not None else None
+            for x in state["key_cache"]
+        ]
+        obj.value_cache = [
+            x.to(device) if x is not None else None
+            for x in state["value_cache"]
+        ]
+        obj.conv_states = [
+            x.to(device) if x is not None else None
+            for x in state["conv_states"]
+        ]
+        obj.recurrent_states = [
+            x.to(device) if x is not None else None
+            for x in state["recurrent_states"]
+        ]
+        return obj
         # ===== TODO: SSD Offload - cache 反序列化 (END) =====
 
     @property
