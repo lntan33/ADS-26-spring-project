@@ -87,9 +87,15 @@ class Qwen3_5DynamicCache:
         3. 返回拼接后的完整 K、V 供注意力计算使用。
         """
         # ===== TODO: KV Cache - Full Attention 缓存更新 (START) =====
-        raise NotImplementedError(
-            "请根据提示实现"
-        )
+        # 第一次初始化
+        if self.key_cache[layer_idx] is None:
+            self.key_cache[layer_idx] = key_states
+            self.value_cache[layer_idx] = value_states
+        else:
+            self.key_cache[layer_idx] = torch.cat([self.key_cache[layer_idx], key_states], dim=2)
+            self.value_cache[layer_idx] = torch.cat([self.value_cache[layer_idx], value_states], dim=2)
+
+        return self.key_cache[layer_idx], self.value_cache[layer_idx]
         # ===== TODO: KV Cache - Full Attention 缓存更新 (END) =====
 
     # ---------- 辅助方法 ----------
@@ -110,9 +116,16 @@ class Qwen3_5DynamicCache:
         3. 否则返回已缓存的序列长度。     
         """
         # ===== TODO: KV Cache - 返回已缓存序列长度 (START) =====
-        raise NotImplementedError(
-            "请根据提示实现"
-        )
+        # 找一个 full attention layer
+        if self.layer_types[layer_idx] != "full_attention":
+            layer_idx = self.transformer_layers[0]
+        
+        cache = self.key_cache[layer_idx]
+
+        if cache is None:
+            return 0
+        
+        return cache.shape[2]
         # ===== TODO: KV Cache - 返回已缓存序列长度 (END) =====
 
     def get_mask_sizes(self, cache_position: torch.Tensor, layer_idx: int) -> tuple[int, int]:
@@ -152,9 +165,34 @@ class Qwen3_5DynamicCache:
         3. 返回新实例。
         """
         # ===== TODO: Prefix Cache - (START) =====
-        raise NotImplementedError(
-            "请根据提示实现 clone()"
-        )
+        new_cache = object.__new__(Qwen3_5DynamicCache)
+
+        # 1. 结构共享（不可变）
+        new_cache.layer_types = self.layer_types
+        new_cache.transformer_layers = self.transformer_layers
+        new_cache.last_linear_layer = self.last_linear_layer
+
+        new_cache.key_cache = [
+            x.clone() if x is not None else None
+            for x in self.key_cache
+        ]
+         
+        new_cache.value_cache = [
+            x.clone() if x is not None else None
+            for x in self.value_cache
+        ]
+
+        new_cache.conv_states = [
+            x.clone() if x is not None else None
+            for x in self.conv_states
+        ]
+
+        new_cache.recurrent_states = [
+            x.clone() if x is not None else None
+            for x in self.recurrent_states
+        ]
+
+        return new_cache
         # ===== TODO: Prefix Cache - (END) =====
 
     # ---------- Phase 4：SSD Offloading 所需的序列化 / 反序列化 ----------
@@ -191,9 +229,27 @@ class Qwen3_5DynamicCache:
         3. 不要 clone——反正 tensor 已离开 GPU，且 `torch.save` 会再做一次拷贝。
         """
         # ===== TODO: SSD Offload - cache 序列化 (START) =====
-        raise NotImplementedError(
-            "请根据提示实现 to_cpu_state_dict()"
-        )
+        return {
+            "layer_types": self.layer_types,
+            "transformer_layers": self.transformer_layers,
+            "last_linear_layer": self.last_linear_layer,
+            "key_cache": [
+                x.detach().cpu() if x is not None else None
+                for x in self.key_cache
+            ],
+            "value_cache": [
+                x.detach().cpu() if x is not None else None
+                for x in self.value_cache
+            ],
+            "conv_states": [
+                x.detach().cpu() if x is not None else None
+                for x in self.conv_states
+            ],
+            "recurrent_states": [
+                x.detach().cpu() if x is not None else None
+                for x in self.recurrent_states
+            ],
+        }
         # ===== TODO: SSD Offload - cache 序列化 (END) =====
 
     @classmethod
@@ -220,9 +276,27 @@ class Qwen3_5DynamicCache:
         4. 返回 obj。
         """
         # ===== TODO: SSD Offload - cache 反序列化 (START) =====
-        raise NotImplementedError(
-            "请根据提示实现 from_cpu_state_dict()"
-        )
+        obj = object.__new__(cls)
+        obj.layer_types = state["layer_types"]
+        obj.transformer_layers = state["transformer_layers"]
+        obj.last_linear_layer = state["last_linear_layer"]
+        obj.key_cache = [
+            x.to(device) if x is not None else None
+            for x in state["key_cache"]
+        ]
+        obj.value_cache = [
+            x.to(device) if x is not None else None
+            for x in state["value_cache"]
+        ]
+        obj.conv_states = [
+            x.to(device) if x is not None else None
+            for x in state["conv_states"]
+        ]
+        obj.recurrent_states = [
+            x.to(device) if x is not None else None
+            for x in state["recurrent_states"]
+        ]
+        return obj
         # ===== TODO: SSD Offload - cache 反序列化 (END) =====
 
     @property

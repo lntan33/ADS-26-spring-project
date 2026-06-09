@@ -87,7 +87,12 @@ def qwen3_5_attention_forward(
     # 将本步产生的 K、V 追加到缓存，取回包含所有历史 token 的完整 K/V，
     # 之后的 attention 计算基于这个完整序列（而非仅本步的 K/V）。
     # 缓存不存在时（no-cache 模式），直接使用本步 K/V 即可。
-    
+    if past_key_values is not None:
+        # 2. 调用你刚刚在 cache.py 里写好的 update 方法
+        # 它会把当前的 key_states 和 value_states 存进去，并返回“历史+当前”的完整版
+        key_states, value_states = past_key_values.update(
+            key_states, value_states, layer_idx
+        )
     # ===== TODO: KV Cache - Full Attention 缓存更新 (END) =====
 
     attn_output, attn_weights = eager_attention_forward(
